@@ -101,4 +101,4 @@ system.time({
 
 # References
 
-1. T. Kobayashi and N. Otsu, Von Mises-Fisher mean shift for clustering on a hypersphere, 2010, 
+1. T. Kobayashi and N. Otsu, Von Mises-Fisher mean shift for clustering on a hypersphere, ICPR 2010.
