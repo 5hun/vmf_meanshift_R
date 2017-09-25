@@ -132,31 +132,31 @@ ms_sphere <- function(
 
     tmp <- merge_centers(X, Y, merge_threshold)
     return(list(
-        cluster_labels = tmp$labels,
-        cluster_centers = tmp$centers,
+        labels = tmp$labels,
+        centers = tmp$centers,
         shifted_means=Y,
         converged=converged
     ))
 }
 
-optimize_silhouette <- function(X, k_seq, ...){
-    k_seq <- sort(unique(k_seq))
-    dmatrix <- 1 - cos_similarity_matrix(X, X, 1)
+optimize_silhouette <- function(X, df_params, dist, dmatrix, cluster_func, ...){
+    df_params <- unique(df_params)
+    df_result <- df_params
+    df_result$silhouette <- -1
     results <- list()
     sres <- list()
-    mean_sindex <- c()
-    for(i in seq_len(length(k_seq))){
-        cur_k <- k_seq[i]
-        results[[i]] <- ms_sphere(X, k=cur_k, ...)
-        sres[[i]] <- silhouette(results[[i]]$cluster_labels, dmatrix=dmatrix)
-        mean_sindex <- c(mean_sindex, mean(sres[[i]][,3]))
+    args <- list(...)
+    for(i in seq_len(nrow(df_params))){
+        results[[i]] <- do.call(cluster_func, args=c(list(X=X), as.list(df_params[i,,drop=FALSE]), args))
+        sres[[i]] <- silhouette(results[[i]]$labels, dist=dist, dmatrix=dmatrix)
+        if(!is.na(sres[[i]][1])){
+            df_result$silhouette[i] <- mean(sres[[i]][,3])
+        }
     }
-    names(results) <- names(k_seq)
-    df_sidx <- data.frame(k = k_seq, mean_silhouette=mean_sindex)
-    best <- results[[which.max(df_sidx$mean_silhouette)]]
+    best <- results[[which.max(df_result$silhouette)]]
     return(list(
         results    = results,
-        silhouette = df_sidx,
+        silhouette = df_result,
         best       = best
     ))
 }
