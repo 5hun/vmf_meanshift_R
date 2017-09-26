@@ -6,6 +6,60 @@ cos_similarity_matrix <- function(A, B, k){ return((A %*% t(B)) * k) }
 l2_norm <- function(X){ sqrt(rowSums(X^2)) }
 l2_normalize <- function(X){ return(X / l2_norm(X)) }
 
+rW <- function(n, mu, k){
+    d  <- length(mu) - 1
+    b <- d / (sqrt(4 * k^2 + d^2) + 2*k)
+    x <- (1 - b) / (1 + b)
+    c <- k * x + d * log(1 - x^2)
+    
+    ret <- rep(0, n)
+    idx <- seq_len(n)
+    while(length(idx) > 0){
+        z <- rbeta(length(idx), d / 2, d / 2)
+        w <- (1 - (1+b)*z) / (1 - (1-b)*z)
+        u <- runif(length(idx))
+        flg <- (k * w + d * log(1 - x*w) - c >= log(u))
+        ret[idx[flg]] <- w[flg]
+        idx <- idx[!flg]
+    }
+    stopifnot(all(is.finite(ret)))
+    return(ret)
+}
+
+rV <- function(n, mu){
+    d <- length(mu)
+    V <- matrix(rnorm(n*d), n, d)
+    V <- l2_normalize(V)
+    V <- V  - (V %*% matrix(mu, d, 1)) %*% matrix(mu, 1, d)
+    return(l2_normalize(V))
+}
+
+rvMF <- function(n, mu, k){
+    d <- length(mu)
+    mu <- matrix(mu, 1, d)
+    mu <- mu / l2_norm(mu)
+    w <- rW(n, mu, k)
+    stopifnot(all(w >= -1 & w <= 1))
+    V <- rV(n, mu)
+    Mu <- t(matrix(mu, d, n))
+    stopifnot(all(abs(l2_norm(V) - 1) <= 1e-5))
+    stopifnot(all(abs(l2_norm(Mu) - 1) <= 1e-5))
+    X <- Mu * w + V * sqrt(1 - w*w)
+    stopifnot(all(dim(X) == c(n, d)))
+    return(X)
+}
+
+make_random_clusters <- function(n, m, d, k){
+    X0 <- l2_normalize(matrix(rnorm(m*d), m, d))
+    label <- sample(seq_len(m), n, replace=TRUE)
+    X <- matrix(0, n, d)
+    for(i in seq_len(m)){
+        flg <- label == i
+        X[flg, ] <- rvMF(sum(flg), X0[i,], k=k)
+    }
+    return(list(X=X, label=label))
+}
+
 cos_similarity_matrix_with_threshold <- function(A, B, k){
     return(pmax(A %*% t(B) - k, 0))
 }

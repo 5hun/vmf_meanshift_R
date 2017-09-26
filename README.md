@@ -84,18 +84,9 @@ plot(X, col=bms_result$best$labels, xlab="1", ylab="2", main=sprintf("Mean Shift
 
 ```R
 set.seed(3)
-N <- 500
-M <- 10
-X0 <- l2_normalize(cbind(rnorm(M), rnorm(M), rnorm(M)))
-true_labels <- sample(seq_len(M), N, replace=TRUE)
-X0 <- X0[true_labels,]
-radians_1 <- ifelse(X0[,1] > 0, 0, pi) + atan(X0[,2] / X0[,1]) + rnorm(N) * 0.2
-radians_2 <- acos(X0[,3]) + rnorm(N) * 0.2
-X <- cbind(
-    cos(radians_1) * sin(radians_2),
-    sin(radians_1) * sin(radians_2),
-    cos(radians_2)
-)
+truth <- make_random_clusters(n=500, m=10, d=3, k=50)
+X <- truth$X
+true_labels <- truth$label
 ```
 
 ## Mean shift clustering
@@ -142,6 +133,55 @@ plot(X[,c(1,3)], col=bms_result$best$labels, pch=bms_result$best$labels, xlab="1
 ![png](output_19_0.png)
 
 
+# Compareing Normal and vMF Mean Shift in High Dimensional Sphere
+
+
+```R
+library(foreach)
+dims <- seq.int(3,10)
+aRIs <- foreach(d = dims, .combine="rbind") %do% {
+    #  Create Data
+    set.seed(d)
+    truth <- make_random_clusters(n=500, m=10, d=d, k=50)
+    X <- truth$X
+    true_labels <- truth$label
+    
+    # Mean Shift Clustering
+    X_n <- t(X) / apply(t(X), 1, sd )
+    dist_X_n <- dist(t(X_n))
+    h.cand <- quantile(dist_X_n, seq( 0.05, 0.40, by=0.05 ) )
+    # Choose parameters via optimizing silhouette index.
+    suppressMessages({bms_result <- optimize_silhouette(X_n, data.frame(h=h.cand), dist=dist_X_n, cluster_func=function(X, h){ bmsClustering(X, h=h)})})
+    
+    # vMF mean shift
+    dmatrix <- 1 - cos_similarity_matrix(X, X, 1)
+    result <- optimize_silhouette(X, data.frame(k=seq(0.5, 0.99, 0.05)),  dmatrix=dmatrix, cluster_func=ms_sphere, max_iter=100, convergence_threshold=1e-5, merge_threshold=0.99)
+    
+    #message(sprintf("dim=%d, aRI= %.3f, %.3f", d, adjustedRandIndex(true_labels, result$best$labels), adjustedRandIndex(true_labels, bms_result$best$labels)))
+    return(c(adjustedRandIndex(true_labels, result$best$labels), adjustedRandIndex(true_labels, bms_result$best$labels)))
+}
+aRIs <- data.frame(dim=dims, aRIs, row.names=NULL)
+colnames(aRIs) <- c("dim", "adjusted_Rand_Index_vMF", "adjusted_Rand_Index_Normal")
+aRIs
+```
+
+
+<table>
+<thead><tr><th scope=col>dim</th><th scope=col>adjusted_Rand_Index_vMF</th><th scope=col>adjusted_Rand_Index_Normal</th></tr></thead>
+<tbody>
+	<tr><td> 3       </td><td>0.9766475</td><td>0.8380781</td></tr>
+	<tr><td> 4       </td><td>0.6517243</td><td>0.4532225</td></tr>
+	<tr><td> 5       </td><td>0.8203910</td><td>0.8203910</td></tr>
+	<tr><td> 6       </td><td>0.9821823</td><td>0.7258188</td></tr>
+	<tr><td> 7       </td><td>0.7045497</td><td>0.6530087</td></tr>
+	<tr><td> 8       </td><td>0.9958167</td><td>0.8060414</td></tr>
+	<tr><td> 9       </td><td>1.0000000</td><td>0.9952599</td></tr>
+	<tr><td>10       </td><td>1.0000000</td><td>0.7039020</td></tr>
+</tbody>
+</table>
+
+
+
 # Benchmark of Very High Dimension and Large Data
 
 
@@ -161,7 +201,7 @@ system.time({
 
 
        user  system elapsed 
-    490.714  74.078 109.935 
+    475.938  65.111 109.165 
 
 
 # References
